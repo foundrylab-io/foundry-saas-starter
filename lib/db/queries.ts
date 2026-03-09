@@ -5,7 +5,7 @@ import { currentUser } from '@clerk/nextjs/server';
 
 export async function getUser() {
   const clerkUser = await currentUser();
-  if (\!clerkUser) {
+  if (!clerkUser) {
     return null;
   }
 
@@ -101,7 +101,7 @@ export async function getUserWithTeam(userId: number) {
 
 export async function getActivityLogs() {
   const user = await getUser();
-  if (\!user) {
+  if (!user) {
     throw new Error('User not authenticated');
   }
 
@@ -122,7 +122,7 @@ export async function getActivityLogs() {
 
 export async function getTeamForUser() {
   const user = await getUser();
-  if (\!user) {
+  if (!user) {
     return null;
   }
 
