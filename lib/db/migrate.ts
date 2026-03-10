@@ -21,7 +21,7 @@ async function migrate() {
   console.log('Found migration files:', migrationFiles.join(', '));
 
   for (const file of migrationFiles) {
-    console.log('Running migration:', file);
+    console.log('\nRunning migration:', file);
     const migrationSQL = readFileSync(join(migrationsDir, file), 'utf-8');
 
     const statements = migrationSQL
@@ -32,19 +32,19 @@ async function migrate() {
     for (let i = 0; i < statements.length; i++) {
       try {
         await sql.unsafe(statements[i]);
-        console.log('  Statement ' + (i + 1) + '/' + statements.length + ' succeeded');
+        console.log(`  Statement ${i + 1}/${statements.length} succeeded`);
       } catch (err: any) {
         if (err.message?.includes('already exists')) {
-          console.log('  Statement ' + (i + 1) + '/' + statements.length + ' skipped (already exists)');
+          console.log(`  Statement ${i + 1}/${statements.length} skipped (already exists)`);
         } else {
-          console.error('  Statement ' + (i + 1) + '/' + statements.length + ' failed:', err.message);
+          console.error(`  Statement ${i + 1}/${statements.length} failed:`, err.message);
           throw err;
         }
       }
     }
   }
 
-  console.log('All migrations complete!');
+  console.log('\nAll migrations complete!');
   await sql.end();
 }
 
