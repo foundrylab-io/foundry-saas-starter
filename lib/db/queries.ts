@@ -22,6 +22,8 @@ export async function getUser() {
     .limit(1);
 
   if (existing.length > 0) {
+    // Ensure user has a team (may be missing if provisioned before this fix)
+    await ensureTeamExists(existing[0].id, existing[0].name || existing[0].email);
     return existing[0];
   }
 
@@ -45,6 +47,7 @@ export async function getUser() {
     .returning();
 
   if (inserted.length > 0) {
+    await ensureTeamExists(inserted[0].id, name);
     return inserted[0];
   }
 
@@ -55,7 +58,38 @@ export async function getUser() {
     .where(eq(users.clerkId, clerkUser.id))
     .limit(1);
 
+  if (retry[0]) {
+    await ensureTeamExists(retry[0].id, retry[0].name || retry[0].email);
+  }
   return retry[0] ?? null;
+}
+
+async function ensureTeamExists(userId: number, userName: string) {
+  // Check if user already has a team membership
+  const membership = await db
+    .select()
+    .from(teamMembers)
+    .where(eq(teamMembers.userId, userId))
+    .limit(1);
+
+  if (membership.length > 0) {
+    return; // already has a team
+  }
+
+  // Create a default team + membership
+  const teamName = `${userName}'s Team`;
+  const [newTeam] = await db
+    .insert(teams)
+    .values({ name: teamName })
+    .returning();
+
+  if (newTeam) {
+    await db.insert(teamMembers).values({
+      userId,
+      teamId: newTeam.id,
+      role: 'owner',
+    });
+  }
 }
 
 export async function getTeamByStripeCustomerId(customerId: string) {
