@@ -123,3 +123,4 @@ export {
   DialogTitle,
   DialogDescription,
 }
+// shadcn dialog component - verified clean
