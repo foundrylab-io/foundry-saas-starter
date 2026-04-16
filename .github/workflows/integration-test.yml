@@ -1,0 +1,61 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: foundry_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Run migrations
+        run: npx tsx lib/db/migrate.ts
+        env:
+          POSTGRES_URL: postgresql://test:test@localhost:5432/foundry_test
+
+      - name: Build
+        run: pnpm run build
+        env:
+          POSTGRES_URL: postgresql://test:test@localhost:5432/foundry_test
+          STRIPE_SECRET_KEY: sk_test_fake_key_for_build_validation
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_fake
+          CLERK_SECRET_KEY: sk_test_fake
+          AUTH_SECRET: fake-auth-secret-for-build
+
+      - name: Start app and run smoke tests
+        run: node scripts/integration-smoke.mjs
+        env:
+          POSTGRES_URL: postgresql://test:test@localhost:5432/foundry_test
+          STRIPE_SECRET_KEY: sk_test_fake_key_for_build_validation
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_fake
+          CLERK_SECRET_KEY: sk_test_fake
+          AUTH_SECRET: fake-auth-secret-for-build
+          PORT: 3000

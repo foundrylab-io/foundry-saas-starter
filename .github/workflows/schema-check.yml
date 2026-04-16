@@ -1,0 +1,28 @@
+name: Schema Consistency Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/db/schema.ts'
+      - 'lib/db/migrations/**'
+
+jobs:
+  schema-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Validate schema consistency
+        run: node scripts/schema-validator.mjs

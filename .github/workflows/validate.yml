@@ -3,6 +3,8 @@ name: Validate Build
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 # IMPORTANT: do NOT cancel in-progress validations.  Foundry's orchestration
 # loop pushes multiple times during a single feature build (cycle 1 push
