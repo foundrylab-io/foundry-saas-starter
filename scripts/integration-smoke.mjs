@@ -106,12 +106,27 @@ function discoverExpectedTables() {
 
 // ── Server Management ────────────────────────────────────────────────────────
 
+// Collects server stderr for error reporting — the actual error stacktraces
+// appear here, not in the HTTP response body.
+let _serverStderr = "";
+
 function startServer() {
   return new Promise((resolve, reject) => {
     const server = spawn("npx", ["next", "start", "-p", PORT], {
       env: { ...process.env, NODE_ENV: "production" },
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
+    });
+
+    // Capture stderr — this is where Next.js prints the actual error details
+    // (e.g. "column 'date' does not exist", "Cannot read property of null")
+    server.stderr.on("data", (data) => {
+      const text = data.toString();
+      _serverStderr += text;
+      // Keep only last 5000 chars to avoid memory issues
+      if (_serverStderr.length > 5000) {
+        _serverStderr = _serverStderr.slice(-5000);
+      }
     });
 
     let started = false;
@@ -187,12 +202,43 @@ async function testRoute(url, type) {
       body.includes("Internal Server Error");
 
     if (isCrash) {
+      // Extract useful error details from the response body
+      // Next.js includes the error digest and sometimes the error message
+      let errorDetail = `SSR crash (status=${status})`;
+      if (body) {
+        // Look for Next.js error patterns in the HTML
+        const digestMatch = body.match(/Digest:\s*(\d+)/);
+        const errorMatch = body.match(/Error:\s*([^\n<]{1,200})/);
+        const columnMatch = body.match(/column\s+"(\w+)"\s+.*does not exist/i);
+        const relationMatch = body.match(/relation\s+"(\w+)"\s+does not exist/i);
+        const typeMatch = body.match(/TypeError:\s*([^\n<]{1,200})/);
+        const refMatch = body.match(/ReferenceError:\s*([^\n<]{1,200})/);
+
+        if (columnMatch) {
+          errorDetail = `DB column "${columnMatch[1]}" does not exist — missing migration`;
+        } else if (relationMatch) {
+          errorDetail = `DB table "${relationMatch[1]}" does not exist — missing migration`;
+        } else if (typeMatch) {
+          errorDetail = `TypeError: ${typeMatch[1]}`;
+        } else if (refMatch) {
+          errorDetail = `ReferenceError: ${refMatch[1]}`;
+        } else if (errorMatch) {
+          errorDetail = `Error: ${errorMatch[1]}`;
+        } else if (digestMatch) {
+          errorDetail = `SSR crash (digest=${digestMatch[1]}) — check server stderr below`;
+        }
+        // Also print first 500 chars of body for raw context
+        const bodyPreview = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
+        if (bodyPreview.length > 50) {
+          errorDetail += `\n    Body: ${bodyPreview}`;
+        }
+      }
       return {
         url,
         type,
         passed: false,
         status,
-        error: `SSR crash detected (status=${status})`,
+        error: errorDetail,
       };
     }
 
@@ -327,6 +373,17 @@ async function main() {
     for (const f of failures) {
       console.error(`  - ${f.url || "db-check"}: ${f.error}`);
     }
+
+    // Print server stderr — this contains the ACTUAL error stacktraces
+    // that the HTTP response body doesn't include (Next.js hides them)
+    if (_serverStderr.trim()) {
+      console.error("\n" + "=".repeat(60));
+      console.error("SERVER STDERR (actual error details):");
+      console.error("=".repeat(60));
+      console.error(_serverStderr.trim());
+      console.error("=".repeat(60));
+    }
+
     process.exit(1);
   }
 }
